@@ -1,0 +1,41 @@
+[package]
+name = "mago-lsp"
+description = "Lsp Related"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+mago-ast = { workspace = true }
+mago-interner = { workspace = true }
+mago-parser = { workspace = true }
+mago-span = { workspace = true }
+mago-source = { workspace = true }
+tower-lsp = { workspace = true }
+mago-walker = { workspace = true }
+# mago-fixer = { workspace = true }
+# mago-semantics = { workspace = true }
+# mago-reporting = { workspace = true }
+# mago-docblock = { workspace = true }
+# mago-ast-utils = { workspace = true }
+# mago-names = { workspace = true }
+# mago-symbol-table = { workspace = true }
+# mago-reflection = { workspace = true }
+# mago-casing = { workspace = true }
+# mago-php-version = { workspace = true }
+# ahash = { workspace = true }
+# serde = { workspace = true }
+# tracing = { workspace = true }
+# regex = { workspace = true }
+# toml = { workspace = true }
+# indoc = { workspace = true }
+
+[dev-dependencies]
+# mago-reflector = { workspace = true }

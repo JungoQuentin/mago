@@ -13,7 +13,7 @@ let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
 	let executable: Executable = {
-		command: '/Users/azjezz/mago/mago/target/debug/mago',
+		command: '/Users/quentin/perso/php/mago/target/debug/mago',
 		args: ['lsp'],
 	};
 

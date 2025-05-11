@@ -2,9 +2,15 @@
 
 use std::borrow::Cow;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use ahash::HashMap;
+use mago_lsp::definition::DefinitionFinder;
+use mago_lsp::helpers::offset_to_position;
+use mago_lsp::helpers::parse_file;
+use mago_lsp::helpers::position_to_offset;
+use mago_span::HasSpan;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Error as ServerError;
 use tower_lsp::jsonrpc::ErrorCode;
@@ -88,38 +94,38 @@ impl MagoLanguageServer {
 #[tower_lsp::async_trait]
 impl LanguageServer for MagoLanguageServer {
     async fn initialize(&self, parameters: InitializeParams) -> ServerResult<InitializeResult> {
-        match parameters.workspace_folders {
-            Some(workspaces) => {
-                for workspace in workspaces {
-                    self.initialize_workspace(workspace.name.clone(), workspace.uri).await?;
-                    self.select_workspace(workspace.name).await?;
-                }
-            }
-            None => {
-                if let Some(root_uri) = parameters.root_uri {
-                    let name = root_uri.to_string();
-                    self.initialize_workspace(name.clone(), root_uri).await?;
-                    self.select_workspace(name).await?;
-                }
-            }
-        };
+        // match parameters.workspace_folders {
+        //     Some(workspaces) => {
+        //         for workspace in workspaces {
+        //             self.initialize_workspace(workspace.name.clone(), workspace.uri).await?;
+        //             self.select_workspace(workspace.name).await?;
+        //         }
+        //     }
+        //     None => {
+        //         if let Some(root_uri) = parameters.root_uri {
+        //             let name = root_uri.to_string();
+        //             self.initialize_workspace(name.clone(), root_uri).await?;
+        //             self.select_workspace(name).await?;
+        //         }
+        //     }
+        // };
 
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 // text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
                 // hover_provider: Some(HoverProviderCapability::Simple(true)),
-                // definition_provider: Some(OneOf::Left(true)),
+                definition_provider: Some(OneOf::Left(true)),
                 // type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 // implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
                 // references_provider: Some(OneOf::Left(true)),
                 // document_formatting_provider: Some(OneOf::Left(true)),
                 // declaration_provider: Some(DeclarationCapability::Simple(true)),
-                diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
-                    identifier: Some(BIN.to_string()),
-                    inter_file_dependencies: true,
-                    workspace_diagnostics: true,
-                    ..DiagnosticOptions::default()
-                })),
+                // diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
+                //     identifier: Some(BIN.to_string()),
+                //     inter_file_dependencies: true,
+                //     workspace_diagnostics: true,
+                //     ..DiagnosticOptions::default()
+                // })),
                 ..ServerCapabilities::default()
             },
             server_info: Some(ServerInfo {
@@ -131,6 +137,42 @@ impl LanguageServer for MagoLanguageServer {
 
     async fn initialized(&self, _: InitializedParams) {
         eprintln!("Mago Language Server initialized");
+    }
+
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> ServerResult<Option<GotoDefinitionResponse>> {
+        let GotoDefinitionParams {
+            text_document_position_params:
+                TextDocumentPositionParams { text_document: TextDocumentIdentifier { uri }, position },
+            ..
+        } = params;
+
+        let file_path = uri.to_file_path().expect("only support file:// scheme");
+        let offset: usize = position_to_offset(&file_path, position);
+
+        let program = parse_file(&file_path);
+
+        let idents = DefinitionFinder.find(&program, offset);
+
+        let n = idents.len();
+
+        if n != 0 {
+            eprint!("\n\n{n} found : {:?}\n\n", idents);
+        } else {
+            eprintln!("-")
+        };
+        let Some(last_identifier) = idents.last() else {
+            return Ok(None);
+        };
+
+        Ok(Some(GotoDefinitionResponse::Link(vec![LocationLink {
+            origin_selection_range: Some(Range::new(
+                offset_to_position(&file_path, last_identifier.span().start.offset).unwrap(),
+                offset_to_position(&file_path, last_identifier.span().end.offset).unwrap(),
+            )),
+            target_uri: Url::from_str("file:///Users/quentin/perso/php/test-php/src/new/classic.php").unwrap(),
+            target_range: Range::new(Position { line: 4, character: 6 }, Position { line: 4, character: 14 }),
+            target_selection_range: Range::new(Position { line: 4, character: 6 }, Position { line: 4, character: 14 }),
+        }])))
     }
 
     async fn workspace_diagnostic(

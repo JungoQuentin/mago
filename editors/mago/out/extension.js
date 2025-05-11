@@ -7,7 +7,7 @@ const node_1 = require("vscode-languageclient/node");
 let client;
 function activate(context) {
     let executable = {
-        command: '/Users/azjezz/mago/mago/target/debug/mago',
+        command: '/Users/quentin/perso/php/mago/target/debug/mago',
         args: ['lsp'],
     };
     let serverOptions = {

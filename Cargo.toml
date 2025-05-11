@@ -33,6 +33,7 @@ mago-formatter = { path = "crates/formatter", version = "0.9.1" }
 mago-interner = { path = "crates/interner", version = "0.9.1" }
 mago-lexer = { path = "crates/lexer", version = "0.9.1" }
 mago-linter = { path = "crates/linter", version = "0.9.1" }
+mago-lsp = { path = "crates/lsp", version = "0.9.1" }
 mago-names = { path = "crates/names", version = "0.9.1" }
 mago-parser = { path = "crates/parser", version = "0.9.1" }
 mago-reflection = { path = "crates/reflection", version = "0.9.1" }
@@ -58,10 +59,15 @@ serde_json = { version = "1.0.138" }
 serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1.39.3", features = ["rt", "time"] }
 strum = { version = "0.26", features = ["derive"] }
-ordered-float = { version = "4.0", default-features = false, features = ["serde"] }
+ordered-float = { version = "4.0", default-features = false, features = [
+    "serde",
+] }
 pretty_assertions = { version = "1.4.1" }
 either = { version = "1.13.0" }
-codespan-reporting = { version = "0.11.1", features = ["serde", "serialization"] }
+codespan-reporting = { version = "0.11.1", features = [
+    "serde",
+    "serialization",
+] }
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 config = { version = "0.15.4", features = ["toml"] }
 toml = { version = "0.8.19" }
@@ -72,8 +78,17 @@ indicatif = { version = "0.17.11", features = ["tokio"] }
 glob-match = "0.2.1"
 paste = "1.0.15"
 criterion = "0.5.1"
-lasso = { version = "0.7.3", features = ["multi-threaded", "ahasher", "inline-more"] }
-clap = { version = "4.5.20", features = ["cargo", "derive", "unicode", "wrap_help"] }
+lasso = { version = "0.7.3", features = [
+    "multi-threaded",
+    "ahasher",
+    "inline-more",
+] }
+clap = { version = "4.5.20", features = [
+    "cargo",
+    "derive",
+    "unicode",
+    "wrap_help",
+] }
 futures = "0.3.31"
 async-walkdir = "2.0.0"
 termtree = "0.5.1"
@@ -83,7 +98,11 @@ serde-wasm-bindgen = "0.6"
 diffy = "0.4.0"
 termcolor = "1.4.1"
 indoc = "2"
-self_update = { version = "0.42.0", features = ["archive-tar", "archive-zip", "compression-flate2"] }
+self_update = { version = "0.42.0", features = [
+    "archive-tar",
+    "archive-zip",
+    "compression-flate2",
+] }
 openssl = { version = "0.10", features = ["vendored"] }
 tempfile = "3.15.0"
 colored = "3.0.0"
@@ -99,6 +118,8 @@ mago-ast = { workspace = true }
 mago-reporting = { workspace = true }
 mago-interner = { workspace = true }
 mago-source = { workspace = true }
+mago-walker = { workspace = true }
+mago-lsp = { workspace = true }
 mago-semantics = { workspace = true }
 mago-linter = { workspace = true }
 mago-reflection = { workspace = true }
@@ -111,7 +132,12 @@ mago-fixer = { workspace = true }
 mago-php-version = { workspace = true }
 mago-reference = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "io-std"] }
+tokio = { workspace = true, features = [
+    "rt",
+    "rt-multi-thread",
+    "time",
+    "io-std",
+] }
 clap = { workspace = true }
 ahash = { workspace = true }
 termtree = { workspace = true }

@@ -1571,6 +1571,7 @@ dependencies = [
  "mago-formatter",
  "mago-interner",
  "mago-linter",
+ "mago-lsp",
  "mago-names",
  "mago-parser",
  "mago-php-version",
@@ -1581,6 +1582,7 @@ dependencies = [
  "mago-semantics",
  "mago-source",
  "mago-span",
+ "mago-walker",
  "num_cpus",
  "openssl",
  "self_update",
@@ -1724,6 +1726,19 @@ dependencies = [
  "serde",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "mago-lsp"
+version = "0.9.1"
+dependencies = [
+ "mago-ast",
+ "mago-interner",
+ "mago-parser",
+ "mago-source",
+ "mago-span",
+ "mago-walker",
+ "tower-lsp",
 ]
 
 [[package]]
