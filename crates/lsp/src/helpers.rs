@@ -6,7 +6,9 @@ use mago_parser::parse_source;
 use mago_source::SourceCategory;
 use mago_source::SourceManager;
 
+use mago_span::Span;
 use tower_lsp::lsp_types::Position as LspPosition;
+use tower_lsp::lsp_types::Range as LspRange;
 
 /// Convert an [`LspPosition`] into an offset
 pub fn position_to_offset(file_path: &PathBuf, position: LspPosition) -> usize {
@@ -39,6 +41,16 @@ pub fn offset_to_position(file_path: &PathBuf, mut offset: usize) -> Option<LspP
 
     // TODO: unreachable ?
     None
+}
+
+pub fn span_to_range(file_path: &PathBuf, span: &Span) -> Option<LspRange> {
+    let Some(start) = offset_to_position(&file_path, span.start.offset) else {
+        return None;
+    };
+    let Some(end) = offset_to_position(&file_path, span.end.offset) else {
+        return None;
+    };
+    Some(LspRange::new(start, end))
 }
 
 /// Parse a single file with its own interner crash when errors found in file

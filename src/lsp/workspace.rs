@@ -5,6 +5,7 @@ use ahash::HashMap;
 use mago_lsp::definition::DefinitionFinder;
 use mago_lsp::helpers::offset_to_position;
 use mago_lsp::helpers::position_to_offset;
+use mago_lsp::helpers::span_to_range;
 use mago_reference::query::Query;
 use mago_reference::ReferenceFinder;
 use mago_reference::ReferenceKind;
@@ -189,15 +190,9 @@ impl MagoWorkspace {
             eprintln!("warn: plusieurs !");
         }
 
-        let range = Range::new(
-            offset_to_position(&file, first.span.start.offset).unwrap(),
-            offset_to_position(&file, first.span.end.offset).unwrap(),
-        );
+        let range = span_to_range(&file, &first.span).unwrap();
         Some(LocationLink {
-            origin_selection_range: Some(Range::new(
-                offset_to_position(&file, last_identifier.span().start.offset).unwrap(),
-                offset_to_position(&file, last_identifier.span().end.offset).unwrap(),
-            )),
+            origin_selection_range: Some(span_to_range(&file, &last_identifier.span()).unwrap()),
             target_uri,
             target_range: range.clone(),
             target_selection_range: range,
