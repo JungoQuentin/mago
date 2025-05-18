@@ -1,6 +1,14 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use ahash::HashMap;
+use mago_lsp::definition::DefinitionFinder;
+use mago_lsp::helpers::offset_to_position;
+use mago_lsp::helpers::position_to_offset;
+use mago_reference::query::Query;
+use mago_reference::ReferenceFinder;
+use mago_reference::ReferenceKind;
+use mago_span::HasSpan;
 use tower_lsp::lsp_types::*;
 
 use mago_interner::ThreadedInterner;
@@ -136,6 +144,63 @@ impl MagoWorkspace {
                     .collect(),
             ),
             full_document_diagnostic_report: FullDocumentDiagnosticReport { result_id: None, items: diagnostics },
+        })
+    }
+
+    /// Simplest implementation of `goto_definition`, only for functions.
+    pub async fn goto_function_definition(
+        &self,
+        interner: &ThreadedInterner,
+        file: &PathBuf,
+        cursor_position: Position,
+    ) -> Option<LocationLink> {
+        let semantics = self
+            .semantics
+            .iter()
+            .find(|semantics| {
+                let semantics_path = semantics.source.path.as_ref().expect("source must have a path");
+
+                semantics_path == file
+            })
+            .unwrap();
+
+        let offset: usize = position_to_offset(&file, cursor_position);
+        let idents = DefinitionFinder.find(&semantics.program, offset);
+
+        if idents.len() > 1 {
+            eprintln!("y'en a trop");
+            return None;
+        }
+
+        let Some(last_identifier) = idents.last() else {
+            return None;
+        };
+
+        let string_identifier = last_identifier.value();
+        let r = interner.lookup(&string_identifier);
+        let references = ReferenceFinder::new(&interner).find(&semantics, Query::EndsWith(r.to_string(), true));
+        let mut references = references.iter().filter(|reference| reference.kind == ReferenceKind::Definition);
+        let target_uri = Url::from_file_path(semantics.source.path.as_ref().unwrap()).unwrap();
+        let Some(first) = references.next() else {
+            eprintln!("pas de ref");
+            return None;
+        };
+        if references.next().is_some() {
+            eprintln!("warn: plusieurs !");
+        }
+
+        let range = Range::new(
+            offset_to_position(&file, first.span.start.offset).unwrap(),
+            offset_to_position(&file, first.span.end.offset).unwrap(),
+        );
+        Some(LocationLink {
+            origin_selection_range: Some(Range::new(
+                offset_to_position(&file, last_identifier.span().start.offset).unwrap(),
+                offset_to_position(&file, last_identifier.span().end.offset).unwrap(),
+            )),
+            target_uri,
+            target_range: range.clone(),
+            target_selection_range: range,
         })
     }
 }

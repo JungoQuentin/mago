@@ -23,6 +23,8 @@ Pour un premier truc, le plus simple me semble evidemement la variable. Sauf que
 Donc peut etre que la fonction serait plus simple ?
 Je vais essayer de partir sur l'utilisation de l'AST direct, donc la variable c'est bien !
 
+-> sauf qu'il a les symbol pour les fn (et pas les variables...)
+
 ## 1. la methode simple : avec le `find`
 
 il existe une commande `mago find <query>` qui permet de trouver plusieurs type de reference (dont declaration, definition, implementation)
