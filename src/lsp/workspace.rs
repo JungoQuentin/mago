@@ -1,9 +1,7 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use ahash::HashMap;
 use mago_lsp::definition::DefinitionFinder;
-use mago_lsp::helpers::offset_to_position;
 use mago_lsp::helpers::position_to_offset;
 use mago_lsp::helpers::span_to_range;
 use mago_reference::query::Query;
@@ -20,7 +18,6 @@ use mago_reporting::AnnotationKind;
 use mago_reporting::Issue;
 use mago_reporting::Level;
 use mago_semantics::Semantics;
-use mago_source::SourceCategory;
 use mago_source::SourceManager;
 use mago_span::Span;
 
@@ -172,7 +169,7 @@ impl MagoWorkspace {
             })
             .unwrap()
             .program;
-        let offset: usize = position_to_offset(&file, cursor_position);
+        let offset: usize = position_to_offset(file, cursor_position);
         let idents = DefinitionFinder.find(file_program, offset);
         // crash if too much (should only find 1)
         if idents.len() > 1 {
@@ -195,7 +192,7 @@ impl MagoWorkspace {
             mago_ast::Identifier::FullyQualified(_) => Query::Exact(identifier, true),
         };
 
-        let references = find_references(&interner, &self.semantics, query).await.unwrap();
+        let references = find_references(interner, &self.semantics, query).await.unwrap();
 
         references
             .iter()
@@ -212,9 +209,9 @@ impl MagoWorkspace {
 
                 let range = span_to_range(&target_file, &reference.span).unwrap();
                 LocationLink {
-                    origin_selection_range: Some(span_to_range(&file, &last_identifier.span()).unwrap()),
+                    origin_selection_range: Some(span_to_range(file, &last_identifier.span()).unwrap()),
                     target_uri,
-                    target_range: range.clone(),
+                    target_range: range,
                     target_selection_range: range,
                 }
             })

@@ -2,16 +2,9 @@
 
 use std::borrow::Cow;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use ahash::HashMap;
-use mago_lsp::definition::DefinitionFinder;
-use mago_lsp::goto_definition;
-use mago_lsp::helpers::offset_to_position;
-use mago_lsp::helpers::parse_file;
-use mago_lsp::helpers::position_to_offset;
-use mago_span::HasSpan;
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Error as ServerError;
 use tower_lsp::jsonrpc::ErrorCode;
