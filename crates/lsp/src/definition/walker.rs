@@ -9,9 +9,7 @@ use super::context::Context;
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct DefinitionFindingWalker;
 
-// use walk_in_* instead of walk_*, because it avoids overloading default trait behavior, wich could stop the walking
 impl<'a> Walker<Context<'a>> for DefinitionFindingWalker {
-    // TODO probleme : ca prend aussi les variables dans des signatures de fonction...
     fn walk_in_direct_variable(&self, direct_variable: &mago_ast::DirectVariable, context: &mut Context<'a>) {
         if direct_variable.span().has_offset(*context.offset) {
             context.identifiers.push(Identifier::Local(mago_ast::LocalIdentifier {

@@ -1,11 +1,4 @@
-use std::path::Path;
 use std::path::PathBuf;
-
-use mago_ast::Program;
-use mago_interner::ThreadedInterner;
-use mago_parser::parse_source;
-use mago_source::SourceCategory;
-use mago_source::SourceManager;
 
 use mago_span::Span;
 use tower_lsp::lsp_types::Position as LspPosition;
@@ -49,18 +42,4 @@ pub fn span_to_range(file_path: &PathBuf, span: &Span) -> Option<LspRange> {
     let end = offset_to_position(file_path, span.end.offset)?;
 
     Some(LspRange::new(start, end))
-}
-
-/// Parse a single file with its own interner crash when errors found in file
-pub fn parse_file(file_path: &Path) -> Program {
-    let interner = ThreadedInterner::new();
-    let source_manager = SourceManager::new(interner.clone());
-
-    let source_id = source_manager.insert_path("current_file", file_path.to_path_buf(), SourceCategory::UserDefined);
-    let source = source_manager.load(&source_id).unwrap();
-    let (ast, error) = parse_source(&interner, &source);
-    if error.is_some() {
-        panic!();
-    }
-    ast
 }
