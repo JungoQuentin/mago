@@ -161,10 +161,8 @@ impl LanguageServer for MagoLanguageServer {
             data: None,
         })?;
 
-        let Some(link) = workspace.goto_function_definition(&self.interner, &file, position).await else {
-            return Ok(None);
-        };
-        Ok(Some(GotoDefinitionResponse::Link(vec![link])))
+        let link = workspace.goto_function_definition(&self.interner, &file, position).await;
+        Ok(Some(GotoDefinitionResponse::Link(link)))
     }
 
     async fn workspace_diagnostic(

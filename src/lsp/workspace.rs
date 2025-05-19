@@ -157,7 +157,7 @@ impl MagoWorkspace {
         interner: &ThreadedInterner,
         file: &PathBuf,
         cursor_position: Position,
-    ) -> Option<LocationLink> {
+    ) -> Vec<LocationLink> {
         // 1. Find symbol to look (under cursor position)
 
         let file_program = &self
@@ -180,7 +180,7 @@ impl MagoWorkspace {
         }
         // return if none foud
         let Some(last_identifier) = idents.last() else {
-            return None;
+            return vec![];
         };
 
         // 2. Find all definitions corresponding to that symbol
@@ -197,7 +197,7 @@ impl MagoWorkspace {
 
         let references = find_references(&interner, &self.semantics, query).await.unwrap();
 
-        let mut references = references
+        let references = references
             .iter()
             .filter(|reference| reference.kind == ReferenceKind::Definition)
             // filter if source as a path (stubs sources content are added directly as &str)
@@ -206,24 +206,21 @@ impl MagoWorkspace {
                 target_source.path.is_some()
             });
 
-        let Some(first) = references.next() else {
-            eprintln!("pas de ref");
-            return None;
-        };
-        if references.next().is_some() {
-            eprintln!("warn: plusieurs !");
-        }
-        let target_source = self.source_manager.load(&first.span.start.source).unwrap();
-        let target_file = target_source.path.unwrap();
-        let target_uri = Url::from_file_path(&target_file).unwrap();
+        references
+            .map(|reference| {
+                let target_source = self.source_manager.load(&reference.span.start.source).unwrap();
+                let target_file = target_source.path.unwrap();
+                let target_uri = Url::from_file_path(&target_file).unwrap();
 
-        let range = span_to_range(&target_file, &first.span).unwrap();
-        Some(LocationLink {
-            origin_selection_range: Some(span_to_range(&file, &last_identifier.span()).unwrap()),
-            target_uri,
-            target_range: range.clone(),
-            target_selection_range: range,
-        })
+                let range = span_to_range(&target_file, &reference.span).unwrap();
+                LocationLink {
+                    origin_selection_range: Some(span_to_range(&file, &last_identifier.span()).unwrap()),
+                    target_uri,
+                    target_range: range.clone(),
+                    target_selection_range: range,
+                }
+            })
+            .collect()
     }
 }
 
