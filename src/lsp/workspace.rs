@@ -197,16 +197,14 @@ impl MagoWorkspace {
 
         let references = find_references(&interner, &self.semantics, query).await.unwrap();
 
-        let references = references
+        references
             .iter()
             .filter(|reference| reference.kind == ReferenceKind::Definition)
             // filter if source as a path (stubs sources content are added directly as &str)
             .filter(|reference| {
                 let target_source = self.source_manager.load(&reference.span.start.source).unwrap();
                 target_source.path.is_some()
-            });
-
-        references
+            })
             .map(|reference| {
                 let target_source = self.source_manager.load(&reference.span.start.source).unwrap();
                 let target_file = target_source.path.unwrap();
