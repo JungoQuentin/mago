@@ -5,7 +5,6 @@ use mago_span::HasSpan;
 use mago_walker::Walker;
 
 use super::context::Context;
-use super::context::{self};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct DefinitionFindingWalker;

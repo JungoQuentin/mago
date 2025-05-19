@@ -13,8 +13,8 @@ pub struct DefinitionFinder;
 
 impl DefinitionFinder {
     pub fn find(&self, program: &Program, offset: usize) -> Vec<Identifier> {
-        let mut context = Context::new(&offset, program);
-        DefinitionFindingWalker.walk_program(&program, &mut context);
+        let mut context = Context::new(&offset);
+        DefinitionFindingWalker.walk_program(program, &mut context);
         context.take_identifiers()
     }
 }
