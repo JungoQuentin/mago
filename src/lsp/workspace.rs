@@ -7,6 +7,7 @@ use mago_lsp::helpers::offset_to_position;
 use mago_lsp::helpers::position_to_offset;
 use mago_lsp::helpers::span_to_range;
 use mago_reference::query::Query;
+use mago_reference::Reference;
 use mago_reference::ReferenceFinder;
 use mago_reference::ReferenceKind;
 use mago_span::HasSpan;
@@ -39,8 +40,10 @@ pub(super) struct MagoWorkspace {
 impl MagoWorkspace {
     pub async fn initialize(interner: &ThreadedInterner, root: PathBuf) -> Result<Self, Error> {
         let configuration = Configuration::load_from(root)?;
-        let source_manager = source::load(interner, &configuration.source, true, true).await?;
-        let sources: Vec<_> = source_manager.source_ids_for_category(SourceCategory::UserDefined).collect();
+        let mut source = configuration.source.clone();
+        source.includes.push("/Users/quentin/perso/php/mago/stubs".into());
+        let source_manager = source::load(interner, &source, true, false).await?; // todo j'add les stubs a la mano (pour avoir un fichier)
+        let sources: Vec<_> = source_manager.source_ids().collect();
         let length = sources.len();
 
         let mut codebase = reflect_all_non_user_defined_sources(interner, &source_manager).await?;
@@ -155,33 +158,54 @@ impl MagoWorkspace {
         file: &PathBuf,
         cursor_position: Position,
     ) -> Option<LocationLink> {
-        let semantics = self
+        // 1. Find symbol to look (under cursor position)
+
+        let file_program = &self
             .semantics
             .iter()
             .find(|semantics| {
-                let semantics_path = semantics.source.path.as_ref().expect("source must have a path");
-
-                semantics_path == file
+                if let Some(semantics_path) = semantics.source.path.as_ref() {
+                    semantics_path == file
+                } else {
+                    false
+                }
             })
-            .unwrap();
-
+            .unwrap()
+            .program;
         let offset: usize = position_to_offset(&file, cursor_position);
-        let idents = DefinitionFinder.find(&semantics.program, offset);
-
+        let idents = DefinitionFinder.find(file_program, offset);
+        // crash if too much (should only find 1)
         if idents.len() > 1 {
-            eprintln!("y'en a trop");
-            return None;
+            todo!("y'en a trop");
         }
-
+        // return if none foud
         let Some(last_identifier) = idents.last() else {
             return None;
         };
 
-        let string_identifier = last_identifier.value();
-        let r = interner.lookup(&string_identifier);
-        let references = ReferenceFinder::new(&interner).find(&semantics, Query::EndsWith(r.to_string(), true));
-        let mut references = references.iter().filter(|reference| reference.kind == ReferenceKind::Definition);
-        let target_uri = Url::from_file_path(semantics.source.path.as_ref().unwrap()).unwrap();
+        // 2. Find all definitions corresponding to that symbol
+
+        let identifier = interner.lookup(&last_identifier.value()).to_string();
+        // TODO update la façon de "Query"
+        // - si c'est Qualified/FullyQualified -> on peut chercher avec un EndsWith/Exact
+        // - sinon, peut etre que le symbole n'a pas de namespace (ex: `in_array`) : donc il faut quelque chose du genre "Query::WordEndsWith" -> pour pas que le EndsWith prenne `class CoucouEtSalut` quand on cherche `class Salut`
+        let query = match last_identifier {
+            mago_ast::Identifier::Local(_) => Query::EndsWith(identifier, true),
+            mago_ast::Identifier::Qualified(_) => Query::EndsWith(identifier, true),
+            mago_ast::Identifier::FullyQualified(_) => Query::Exact(identifier, true),
+        };
+
+        let references = find_references(&interner, &self.semantics, query).await.unwrap();
+
+        let mut references = references
+            .iter()
+            .filter(|reference| reference.kind == ReferenceKind::Definition)
+            // filter if source as a path (stubs sources content are added directly as &str)
+            .filter(|reference| {
+                let target_source = self.source_manager.load(&reference.span.start.source).unwrap();
+                target_source.path.is_some()
+            });
+
         let Some(first) = references.next() else {
             eprintln!("pas de ref");
             return None;
@@ -189,8 +213,11 @@ impl MagoWorkspace {
         if references.next().is_some() {
             eprintln!("warn: plusieurs !");
         }
+        let target_source = self.source_manager.load(&first.span.start.source).unwrap();
+        let target_file = target_source.path.unwrap();
+        let target_uri = Url::from_file_path(&target_file).unwrap();
 
-        let range = span_to_range(&file, &first.span).unwrap();
+        let range = span_to_range(&target_file, &first.span).unwrap();
         Some(LocationLink {
             origin_selection_range: Some(span_to_range(&file, &last_identifier.span()).unwrap()),
             target_uri,
@@ -198,6 +225,29 @@ impl MagoWorkspace {
             target_selection_range: range,
         })
     }
+}
+
+/// based on `mago::commands::find::find_references`
+pub async fn find_references(
+    interner: &ThreadedInterner,
+    semantics: &Vec<Semantics>,
+    query: Query,
+) -> Result<Vec<Reference>, Error> {
+    let mut handles = Vec::with_capacity(semantics.len());
+    for sem in semantics {
+        let interner = interner.clone();
+        let sem = sem.clone();
+        let query = query.clone();
+        handles.push(tokio::spawn(async move {
+            let references = ReferenceFinder::new(&interner).find(&sem, query);
+            Result::<_, Error>::Ok(references)
+        }));
+    }
+    let mut all_references = Vec::with_capacity(semantics.len());
+    for handle in handles {
+        all_references.extend(handle.await??);
+    }
+    Ok(all_references)
 }
 
 fn issue_to_diagnostic(
