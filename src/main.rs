@@ -16,6 +16,7 @@ mod commands;
 mod config;
 mod consts;
 mod error;
+mod lsp;
 mod macros;
 mod reflection;
 mod source;
@@ -72,6 +73,7 @@ pub fn run() -> Result<ExitCode, Error> {
         MagoCommand::Format(cmd) => runtime.block_on(commands::format::execute(cmd, configuration)),
         MagoCommand::Ast(cmd) => runtime.block_on(commands::ast::execute(cmd)),
         MagoCommand::Find(find) => runtime.block_on(commands::find::execute(find, configuration)),
+        MagoCommand::Lsp(cmd) => runtime.block_on(commands::lsp::execute(cmd)),
         MagoCommand::SelfUpdate(_) => {
             unreachable!("The self-update command should have been handled before this point.")
         }

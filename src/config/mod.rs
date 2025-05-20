@@ -130,6 +130,10 @@ impl Configuration {
         Ok(configuration)
     }
 
+    pub fn load_from(root: PathBuf) -> Result<Configuration, Error> {
+        Self::load(Some(root), None, None, None, true)
+    }
+
     /// Creates a new `Configuration` with the given workspace directory.
     ///
     /// # Arguments
