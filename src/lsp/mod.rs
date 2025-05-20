@@ -6,12 +6,12 @@ use std::sync::Arc;
 
 use ahash::HashMap;
 use tokio::sync::RwLock;
+use tower_lsp::Client;
+use tower_lsp::LanguageServer;
 use tower_lsp::jsonrpc::Error as ServerError;
 use tower_lsp::jsonrpc::ErrorCode;
 use tower_lsp::jsonrpc::Result as ServerResult;
 use tower_lsp::lsp_types::*;
-use tower_lsp::Client;
-use tower_lsp::LanguageServer;
 
 use mago_interner::ThreadedInterner;
 
@@ -19,6 +19,8 @@ use crate::consts::BIN;
 use crate::consts::VERSION;
 use crate::lsp::workspace::MagoWorkspace;
 
+mod definition;
+mod helpers;
 mod workspace;
 
 #[derive(Debug, Clone)]
@@ -64,7 +66,7 @@ impl MagoLanguageServer {
                     code: ErrorCode::InvalidRequest,
                     message: Cow::Owned(format!("workspace root URI is not a file URI: {}", root_uri)),
                     data: None,
-                })
+                });
             }
         };
 
@@ -75,7 +77,7 @@ impl MagoLanguageServer {
                     code: ErrorCode::InternalError,
                     message: Cow::Owned(format!("failed to initialize workspace: {}", error)),
                     data: None,
-                })
+                });
             }
         };
 
@@ -108,7 +110,7 @@ impl LanguageServer for MagoLanguageServer {
             capabilities: ServerCapabilities {
                 // text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
                 // hover_provider: Some(HoverProviderCapability::Simple(true)),
-                // definition_provider: Some(OneOf::Left(true)),
+                definition_provider: Some(OneOf::Left(true)),
                 // type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
                 // implementation_provider: Some(ImplementationProviderCapability::Simple(true)),
                 // references_provider: Some(OneOf::Left(true)),
@@ -131,6 +133,32 @@ impl LanguageServer for MagoLanguageServer {
 
     async fn initialized(&self, _: InitializedParams) {
         eprintln!("Mago Language Server initialized");
+    }
+
+    async fn goto_definition(&self, params: GotoDefinitionParams) -> ServerResult<Option<GotoDefinitionResponse>> {
+        let workspace_name = self.get_current_workspace_name().await.ok_or_else(|| ServerError {
+            code: ErrorCode::InvalidRequest,
+            message: Cow::Owned("no workspace selected".to_string()),
+            data: None,
+        })?;
+
+        let workspaces = self.workspaces.read().await;
+        let workspace = workspaces.get(&workspace_name).unwrap();
+
+        let GotoDefinitionParams {
+            text_document_position_params:
+                TextDocumentPositionParams { text_document: TextDocumentIdentifier { uri }, position },
+            ..
+        } = params;
+
+        let file = uri.to_file_path().map_err(|_| ServerError {
+            code: ErrorCode::InvalidRequest,
+            message: Cow::Owned(format!("invalid URI: {}", uri)),
+            data: None,
+        })?;
+
+        let link = workspace.goto_function_definition(&self.interner, &file, position).await;
+        Ok(Some(GotoDefinitionResponse::Link(link)))
     }
 
     async fn workspace_diagnostic(
@@ -181,7 +209,7 @@ impl LanguageServer for MagoLanguageServer {
                     code: ErrorCode::InternalError,
                     message: Cow::Owned(format!("failed to get document diagnostic report: {}", error)),
                     data: None,
-                })
+                });
             }
         };
 

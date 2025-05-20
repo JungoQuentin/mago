@@ -1,22 +1,30 @@
 use std::path::PathBuf;
 
 use ahash::HashMap;
+use tower_lsp::lsp_types::*;
+
+use mago_interner::ThreadedInterner;
 use mago_project::Project;
 use mago_project::ProjectBuilder;
 use mago_project::module::Module;
 use mago_project::module::ModuleBuildOptions;
-use tower_lsp::lsp_types::*;
-
-use mago_interner::ThreadedInterner;
+use mago_reference::Reference;
+use mago_reference::ReferenceFinder;
+use mago_reference::ReferenceKind;
+use mago_reference::query::Query;
 use mago_reporting::AnnotationKind;
 use mago_reporting::Issue;
 use mago_reporting::Level;
 use mago_source::SourceCategory;
 use mago_source::SourceManager;
+use mago_span::HasSpan;
 use mago_span::Span;
 
 use crate::config::Configuration;
 use crate::error::Error;
+use crate::lsp::definition::DefinitionFinder;
+use crate::lsp::helpers::position_to_offset;
+use crate::lsp::helpers::span_to_range;
 use crate::reflection::reflect_non_user_sources;
 use crate::source;
 
@@ -30,7 +38,9 @@ pub(super) struct MagoWorkspace {
 impl MagoWorkspace {
     pub async fn initialize(interner: &ThreadedInterner, root: PathBuf) -> Result<Self, Error> {
         let configuration = Configuration::load_from(root)?;
-        let source_manager = source::load(interner, &configuration.source, true, true).await?;
+        let mut source = configuration.source.clone();
+        source.includes.push("/Users/quentin/perso/php/mago/stubs".into()); // todo j'add les stubs a la mano (pour avoir un fichier)
+        let source_manager = source::load(interner, &source, true, true).await?;
         let sources: Vec<_> = source_manager.source_ids_for_category(SourceCategory::UserDefined);
         let length = sources.len();
 
@@ -47,20 +57,20 @@ impl MagoWorkspace {
 
                 async move {
                     let source = manager.load(&source_id)?;
-                    let module = Module::build(
+                    let module_and_ast = Module::build_with_ast(
                         &interner,
                         configuration.php_version,
                         source,
                         ModuleBuildOptions::new(true, true),
                     );
 
-                    Result::<_, Error>::Ok(module)
+                    Result::<_, Error>::Ok(module_and_ast)
                 }
             }));
         }
 
         for handle in handles {
-            let module = handle.await??;
+            let (module, _ast) = handle.await??;
             project_builder.add_module(module);
         }
 
@@ -143,6 +153,97 @@ impl MagoWorkspace {
             full_document_diagnostic_report: FullDocumentDiagnosticReport { result_id: None, items: diagnostics },
         })
     }
+
+    /// Simplest implementation of `goto_definition`, only for functions.
+    pub async fn goto_function_definition(
+        &self,
+        interner: &ThreadedInterner,
+        file: &PathBuf,
+        cursor_position: Position,
+    ) -> Vec<LocationLink> {
+        // 1. Find symbol to look (under cursor position)
+
+        let file_program = self
+            .project
+            .modules
+            .iter()
+            .find(|semantics| {
+                if let Some(semantics_path) = semantics.source.path.as_ref() { semantics_path == file } else { false }
+            })
+            .unwrap()
+            .parse(interner);
+
+        let offset: usize = position_to_offset(file, cursor_position);
+        let idents = DefinitionFinder.find(&file_program, offset);
+        // crash if too much (should only find 1)
+        if idents.len() > 1 {
+            todo!("y'en a trop");
+        }
+        // return if none foud
+        let Some(last_identifier) = idents.last() else {
+            return vec![];
+        };
+
+        // 2. Find all definitions corresponding to that symbol
+
+        let identifier = interner.lookup(last_identifier.value()).to_string();
+        // TODO update la façon de "Query"
+        // - si c'est Qualified/FullyQualified -> on peut chercher avec un EndsWith/Exact
+        // - sinon, peut etre que le symbole n'a pas de namespace (ex: `in_array`) : donc il faut quelque chose du genre "Query::WordEndsWith" -> pour pas que le EndsWith prenne `class CoucouEtSalut` quand on cherche `class Salut`
+        let query = match last_identifier {
+            mago_syntax::ast::Identifier::Local(_) => Query::EndsWith(identifier, true),
+            mago_syntax::ast::Identifier::Qualified(_) => Query::EndsWith(identifier, true),
+            mago_syntax::ast::Identifier::FullyQualified(_) => Query::Exact(identifier, true),
+        };
+
+        let references = find_references(interner, &self.project.modules, query).await.unwrap();
+
+        references
+            .iter()
+            .filter(|reference| reference.kind == ReferenceKind::Definition)
+            // filter if source as a path (stubs sources content are added directly as &str)
+            .filter(|reference| {
+                let target_source = self.source_manager.load(&reference.span.start.source).unwrap();
+                target_source.path.is_some()
+            })
+            .map(|reference| {
+                let target_source = self.source_manager.load(&reference.span.start.source).unwrap();
+                let target_file = target_source.path.unwrap();
+                let target_uri = Url::from_file_path(&target_file).unwrap();
+
+                let range = span_to_range(&target_file, &reference.span).unwrap();
+                LocationLink {
+                    origin_selection_range: Some(span_to_range(file, &last_identifier.span()).unwrap()),
+                    target_uri,
+                    target_range: range,
+                    target_selection_range: range,
+                }
+            })
+            .collect()
+    }
+}
+
+/// based on `mago::commands::find::find_references`
+pub async fn find_references(
+    interner: &ThreadedInterner,
+    modules: &Vec<Module>,
+    query: Query,
+) -> Result<Vec<Reference>, Error> {
+    let mut handles = Vec::with_capacity(modules.len());
+    for module in modules {
+        let interner = interner.clone();
+        let module = module.clone();
+        let query = query.clone();
+        handles.push(tokio::spawn(async move {
+            let references = ReferenceFinder::new(&interner).find(&module, &module.parse(&interner), query);
+            Result::<_, Error>::Ok(references)
+        }));
+    }
+    let mut all_references = Vec::with_capacity(modules.len());
+    for handle in handles {
+        all_references.extend(handle.await??);
+    }
+    Ok(all_references)
 }
 
 fn issue_to_diagnostic(
